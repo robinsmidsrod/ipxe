@@ -334,10 +334,12 @@ static int int13_command_start ( struct int13_command *command,
 	start_timer_fixed ( &command->timer, INT13_COMMAND_TIMEOUT );
 
 	/* Wait for block control interface to become ready */
+	DBG ( "INT13 waiting for block interface...\n" );
 	while ( ( command->rc == -EINPROGRESS ) &&
 		( xfer_window ( &int13->block ) == 0 ) ) {
 		step();
 	}
+	DBG ( "INT13 block interface ready\n" );
 
 	return ( ( command->rc == -EINPROGRESS ) ?
 		 int13->block_rc : command->rc );
@@ -357,6 +359,7 @@ static int int13_command_wait ( struct int13_command *command ) {
 	/* Wait for command to complete */
 	while ( command->rc == -EINPROGRESS )
 		step();
+	DBG ( "INT13 block interface done\n" );
 
 	assert ( ! timer_running ( &command->timer ) );
 	return command->rc;

@@ -34,6 +34,9 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #include <ipxe/errortab.h>
 #include <ipxe/netdevice.h>
 
+extern void undinet_poll ( struct net_device *netdev );
+extern struct net_device_operations undinet_operations;
+
 /** @file
  *
  * Network device management
@@ -670,6 +673,9 @@ int net_tx ( struct io_buffer *iobuf, struct net_device *netdev,
 	     const void *ll_source ) {
 	struct ll_protocol *ll_protocol = netdev->ll_protocol;
 	int rc;
+
+	assert ( netdev->op == &undinet_operations );
+	assert ( netdev->op->poll == undinet_poll );
 
 	/* Force a poll on the netdevice to (potentially) clear any
 	 * backed-up TX completions.  This is needed on some network

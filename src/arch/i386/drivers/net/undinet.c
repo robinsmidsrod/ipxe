@@ -294,7 +294,7 @@ static int undinet_transmit ( struct net_device *netdev,
  * from within interrupt context in order to deassert the device
  * interrupt, and sends EOI if applicable.
  */
-static void undinet_poll ( struct net_device *netdev ) {
+void undinet_poll ( struct net_device *netdev ) {
 	struct undi_nic *undinic = netdev->priv;
 	struct s_PXENV_UNDI_ISR undi_isr;
 	struct io_buffer *iobuf = NULL;
@@ -341,11 +341,16 @@ static void undinet_poll ( struct net_device *netdev ) {
 		switch ( undi_isr.FuncFlag ) {
 		case PXENV_UNDI_ISR_OUT_TRANSMIT:
 			/* We don't care about transmit completions */
+			DBG ( "undinet_poll: PXENV_UNDI_ISR_OUT_TRANSMIT\n" );
 			break;
 		case PXENV_UNDI_ISR_OUT_RECEIVE:
 			/* Packet fragment received */
+			DBG ( "undinet_poll: PXENV_UNDI_ISR_OUT_RECEIVE: %x of %x at %04x:%04x\n",
+			    undi_isr.BufferLength, undi_isr.FrameLength,
+			    undi_isr.Frame.segment, undi_isr.Frame.offset );
 			len = undi_isr.FrameLength;
 			frag_len = undi_isr.BufferLength;
+			DBG ( "OUT_RX: before vmware if\n" );
 			if ( ( len == 0 ) || ( len < frag_len ) ) {
 				/* Don't laugh.  VMWare does it. */
 				DBGC ( undinic, "UNDINIC %p reported insane "
@@ -354,8 +359,10 @@ static void undinet_poll ( struct net_device *netdev ) {
 				netdev_rx_err ( netdev, NULL, -EINVAL );
 				break;
 			}
+			DBG ( "OUT_RX: before alloc_iob if\n" );
 			if ( ! iobuf )
 				iobuf = alloc_iob ( len );
+			DBG ( "OUT_RX: before netdev_rx_err if\n" );
 			if ( ! iobuf ) {
 				DBGC ( undinic, "UNDINIC %p could not "
 				       "allocate %zd bytes for RX buffer\n",
@@ -364,7 +371,9 @@ static void undinet_poll ( struct net_device *netdev ) {
 				netdev_rx_err ( netdev, NULL, -ENOMEM );
 				goto done;
 			}
+			DBG ( "OUT_RX: before iob_tailroom\n" );
 			max_frag_len = iob_tailroom ( iobuf );
+			DBG ( "OUT_RX: before max_frag_len if\n" );
 			if ( frag_len > max_frag_len ) {
 				DBGC ( undinic, "UNDINIC %p fragment too big "
 				       "(%zd+%zd does not fit into %zd)\n",
@@ -372,25 +381,30 @@ static void undinet_poll ( struct net_device *netdev ) {
 				       ( iob_len ( iobuf ) + max_frag_len ) );
 				frag_len = max_frag_len;
 			}
+			DBG ( "OUT_RX: before copy_from_real\n" );
 			copy_from_real ( iob_put ( iobuf, frag_len ),
 					 undi_isr.Frame.segment,
 					 undi_isr.Frame.offset, frag_len );
+			DBG ( "OUT_RX: before netdev_rx if\n" );
 			if ( iob_len ( iobuf ) == len ) {
 				/* Whole packet received; deliver it */
 				netdev_rx ( netdev, iob_disown ( iobuf ) );
 				/* Etherboot 5.4 fails to return all packets
 				 * under mild load; pretend it retriggered.
 				 */
+				DBG ( "OUT_RX: before undinic_hacks if\n" );
 				if ( undinic->hacks & UNDI_HACK_EB54 )
 					--last_trigger_count;
 			}
 			break;
 		case PXENV_UNDI_ISR_OUT_DONE:
 			/* Processing complete */
+			DBG ( "undinet_poll: PXENV_UNDI_ISR_OUT_DONE\n" );
 			undinic->isr_processing = 0;
 			goto done;
 		default:
 			/* Should never happen.  VMWare does it routinely. */
+			DBG ( "undinet_poll: default\n" );
 			DBGC ( undinic, "UNDINIC %p ISR returned invalid "
 			       "FuncFlag %04x\n", undinic, undi_isr.FuncFlag );
 			undinic->isr_processing = 0;
@@ -514,7 +528,7 @@ static void undinet_irq ( struct net_device *netdev, int enable ) {
 }
 
 /** UNDI network device operations */
-static struct net_device_operations undinet_operations = {
+struct net_device_operations undinet_operations = {
 	.open		= undinet_open,
 	.close		= undinet_close,
 	.transmit	= undinet_transmit,

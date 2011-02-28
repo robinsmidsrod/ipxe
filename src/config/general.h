@@ -155,7 +155,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #undef	BUILD_ID		/* Include a custom build ID string,
 				 * e.g "test-foo" */
 #undef	NULL_TRAP		/* Attempt to catch NULL function calls */
-#undef	GDBSERIAL		/* Remote GDB debugging over serial */
+#define	GDBSERIAL		/* Remote GDB debugging over serial */
 #undef	GDBUDP			/* Remote GDB debugging over UDP
 				 * (both may be set) */
 
