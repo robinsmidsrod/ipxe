@@ -1052,6 +1052,11 @@ allpxes allisos alldsks : all%s : $(foreach DRIVER,$(DRIVERS),$(BIN)/$(DRIVER).%
 $(BIN)/etherboot.% : $(BIN)/ipxe.%
 	ln -sf $(notdir $<) $@
 
+# Alias for VirtualBox emulated NICs
+#
+$(BIN)/vbox.% : $(BIN)/intel--virtio-net--pcnet32.%
+	cp -f $< $@
+
 endif # defined(BIN)
 
 ###############################################################################
