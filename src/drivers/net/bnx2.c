@@ -1441,6 +1441,7 @@ static void bnx2_remove ( struct pci_device *pci ) {
 /** bnx2 PCI device IDs */
 static struct pci_device_id bnx2_nics[] = {
 	PCI_ROM ( 0x14e4, 0x1639, "bnx2-5709C", "BCM5709C", 0 ),
+	PCI_ROM ( 0x14e4, 0x163a, "bnx2-5709S", "BCM5709CB1KPBG", 0 ),
 	PCI_ROM ( 0x14e4, 0x163b, "bnx2-5716C", "BCM5716C", 0 ),
 	PCI_ROM ( 0x14e4, 0x164a, "bnx2-5706C", "BCM5706C", 0 ),
 	PCI_ROM ( 0x14e4, 0x164c, "bnx2-5708C", "BCM5708C", 0 ),
