@@ -381,13 +381,11 @@ static void __attribute__ (( unused )) intel_diag ( struct intel_nic *intel ) {
  * Reset hardware
  *
  * @v intel		Intel device
- * @ret rc		Return status code
  */
-static int intel_reset ( struct intel_nic *intel ) {
+static void intel_reset ( struct intel_nic *intel ) {
 	uint32_t pbs;
 	uint32_t pba;
 	uint32_t ctrl;
-	uint32_t status;
 
 	/* Force RX and TX packet buffer allocation, to work around an
 	 * errata in ICH devices.
@@ -404,27 +402,12 @@ static int intel_reset ( struct intel_nic *intel ) {
 		       pba, readl ( intel->regs + INTEL_PBA ) );
 	}
 
-	/* Always reset MAC.  Required to reset the TX and RX rings. */
-	ctrl = readl ( intel->regs + INTEL_CTRL );
-	writel ( ( ctrl | INTEL_CTRL_RST ), intel->regs + INTEL_CTRL );
-	mdelay ( INTEL_RESET_DELAY_MS );
-
 	/* Set a sensible default configuration */
+	ctrl = readl ( intel->regs + INTEL_CTRL );
 	ctrl |= ( INTEL_CTRL_SLU | INTEL_CTRL_ASDE );
 	ctrl &= ~( INTEL_CTRL_LRST | INTEL_CTRL_FRCSPD | INTEL_CTRL_FRCDPLX );
 	writel ( ctrl, intel->regs + INTEL_CTRL );
 	mdelay ( INTEL_RESET_DELAY_MS );
-
-	/* If link is already up, do not attempt to reset the PHY.  On
-	 * some models (notably ICH), performing a PHY reset seems to
-	 * drop the link speed to 10Mbps.
-	 */
-	status = readl ( intel->regs + INTEL_STATUS );
-	if ( status & INTEL_STATUS_LU ) {
-		DBGC ( intel, "INTEL %p MAC reset (ctrl %08x)\n",
-		       intel, ctrl );
-		return 0;
-	}
 
 	/* Reset PHY and MAC simultaneously */
 	writel ( ( ctrl | INTEL_CTRL_RST | INTEL_CTRL_PHY_RST ),
@@ -434,9 +417,7 @@ static int intel_reset ( struct intel_nic *intel ) {
 	/* PHY reset is not self-clearing on all models */
 	writel ( ctrl, intel->regs + INTEL_CTRL );
 	mdelay ( INTEL_RESET_DELAY_MS );
-
 	DBGC ( intel, "INTEL %p MAC+PHY reset (ctrl %08x)\n", intel, ctrl );
-	return 0;
 }
 
 /******************************************************************************
@@ -683,6 +664,7 @@ static int intel_open ( struct net_device *netdev ) {
  */
 static void intel_close ( struct net_device *netdev ) {
 	struct intel_nic *intel = netdev->priv;
+	uint32_t ctrl;
 
 	/* Disable receiver */
 	writel ( 0, intel->regs + INTEL_RCTL );
@@ -699,8 +681,10 @@ static void intel_close ( struct net_device *netdev ) {
 	/* Destroy transmit descriptor ring */
 	intel_destroy_ring ( intel, &intel->tx );
 
-	/* Reset the NIC, to flush the transmit and receive FIFOs */
-	intel_reset ( intel );
+	/* Reset the MAC, to flush the transmit and receive FIFOs */
+	ctrl = readl ( intel->regs + INTEL_CTRL );
+	writel ( ( ctrl | INTEL_CTRL_RST ), intel->regs + INTEL_CTRL );
+	mdelay ( INTEL_RESET_DELAY_MS );
 }
 
 /**
@@ -930,15 +914,19 @@ static int intel_probe ( struct pci_device *pci ) {
 	}
 
 	/* Reset the NIC */
-	if ( ( rc = intel_reset ( intel ) ) != 0 )
-		goto err_reset;
+	intel_reset ( intel );
 
 	/* Fetch MAC address */
 	if ( ( rc = intel_fetch_mac ( intel, netdev->hw_addr ) ) != 0 )
 		goto err_fetch_mac;
 
-	/* Initialise MII interface */
+	/* Initialise MII interface and restart autonegotiation */
 	mii_init ( &intel->mii, &intel_mii_operations );
+	if ( ( rc = mii_restart ( &intel->mii ) ) != 0 ) {
+		DBGC ( intel, "INTEL %p could not restart autonegotiation: "
+		       "%s\n", intel, strerror ( rc ) );
+		goto err_mii_restart;
+	}
 
 	/* Register network device */
 	if ( ( rc = register_netdev ( netdev ) ) != 0 )
@@ -951,9 +939,9 @@ static int intel_probe ( struct pci_device *pci ) {
 
 	unregister_netdev ( netdev );
  err_register_netdev:
+ err_mii_restart:
  err_fetch_mac:
 	intel_reset ( intel );
- err_reset:
 	iounmap ( intel->regs );
  err_ioremap:
 	netdev_nullify ( netdev );
