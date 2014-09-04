@@ -12,6 +12,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #include <stdint.h>
 #include <ipxe/if_ether.h>
 #include <ipxe/nvs.h>
+#include <ipxe/mii.h>
 
 /** Intel BAR size */
 #define INTEL_BAR_SIZE ( 128 * 1024 )
@@ -87,6 +88,23 @@ enum intel_descriptor_status {
 
 /** Offset of MAC address within EEPROM */
 #define INTEL_EEPROM_MAC 0x00
+
+/** MDI Control Register */
+#define INTEL_MDIC 0x00020UL
+#define INTEL_MDIC_WRDATA(x)	( (x) << 0 )	/**< Data to write */
+#define INTEL_MDIC_RDDATA(value) ( (value) & 0xffff ) /**< Read data */
+#define INTEL_MDIC_REGADD(x)	( (x) << 16 )	/**< PHY register address */
+#define INTEL_MDIC_PHYADD(x)	( (x) << 21 )	/**< PHY address */
+#define INTEL_MDIC_PHYADD_INTERNAL \
+	INTEL_MDIC_PHYADD ( 1 )			/**< Internal PHY address */
+#define INTEL_MDIC_OP(x)	( (x) << 26 )	/**< Opcode */
+#define INTEL_MDIC_OP_WRITE	INTEL_MDIC_OP ( 1 ) /**< Write opcode */
+#define INTEL_MDIC_OP_READ	INTEL_MDIC_OP ( 2 ) /**< Read opcode */
+#define INTEL_MDIC_READY	0x10000000UL	/**< Ready */
+#define INTEL_MDIC_ERROR	0x40000000UL	/**< Error */
+
+/** Maximum time to wait for MII read/write, in microseconds */
+#define INTEL_MII_MAX_WAIT_US 500
 
 /** Interrupt Cause Read Register */
 #define INTEL_ICR 0x000c0UL
@@ -238,6 +256,9 @@ struct intel_nic {
 	uint32_t eerd_done;
 	/** EEPROM address shift */
 	unsigned int eerd_addr_shift;
+
+	/** MII */
+	struct mii_interface mii;
 
 	/** Transmit descriptor ring */
 	struct intel_ring tx;

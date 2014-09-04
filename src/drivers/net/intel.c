@@ -27,6 +27,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #include <ipxe/netdevice.h>
 #include <ipxe/ethernet.h>
 #include <ipxe/if_ether.h>
+#include <ipxe/mii.h>
 #include <ipxe/iobuf.h>
 #include <ipxe/malloc.h>
 #include <ipxe/pci.h>
@@ -245,6 +246,103 @@ static int intel_fetch_mac ( struct intel_nic *intel, uint8_t *hw_addr ) {
 	DBGC ( intel, "INTEL %p has no MAC address to use\n", intel );
 	return -ENOENT;
 }
+
+/******************************************************************************
+ *
+ * MII interface
+ *
+ ******************************************************************************
+ */
+
+/**
+ * Wait for MII operation to complete
+ *
+ * @v intel		Intel NIC
+ * @ret rddata		Returned data, or negative error
+ */
+static int intel_mii_wait ( struct intel_nic *intel ) {
+	unsigned int i;
+	uint32_t mdic;
+
+	/* Wait for operation to complete */
+	for ( i = 0 ; i < INTEL_MII_MAX_WAIT_US ; i++ ) {
+
+		/* If operation is not complete, delay 1us and retry */
+		mdic = readl ( intel->regs + INTEL_MDIC );
+		if ( ! ( mdic & INTEL_MDIC_READY ) ) {
+			udelay ( 1 );
+			continue;
+		}
+
+		/* Check for errors */
+		if ( mdic & INTEL_MDIC_ERROR ) {
+			DBGC2 ( intel, "INTEL %p failed to complete MII "
+				"operation\n", intel );
+			return -EIO;
+		}
+
+		/* Extract data (if present) */
+		return INTEL_MDIC_RDDATA ( mdic );
+	}
+
+	DBGC ( intel, "INTEL %p timed out waiting for MII operation\n", intel );
+	return -ETIMEDOUT;
+}
+
+/**
+ * Read from MII register
+ *
+ * @v mii		MII interface
+ * @v reg		Register address
+ * @ret data		Data read, or negative error
+ */
+static int intel_mii_read ( struct mii_interface *mii, unsigned int reg ) {
+	struct intel_nic *intel = container_of ( mii, struct intel_nic, mii );
+	int rddata;
+
+	/* Initiate read */
+	writel ( ( INTEL_MDIC_REGADD ( reg ) | INTEL_MDIC_PHYADD_INTERNAL |
+		   INTEL_MDIC_OP_READ ), intel->regs + INTEL_MDIC );
+
+	/* Wait for read to complete */
+	rddata = intel_mii_wait ( intel );
+	if ( rddata < 0 )
+		return rddata;
+
+	return rddata;
+}
+
+/**
+ * Write to MII register
+ *
+ * @v mii		MII interface
+ * @v reg		Register address
+ * @v data		Data to write
+ * @ret rc		Return status code
+ */
+static int intel_mii_write ( struct mii_interface *mii, unsigned int reg,
+			     unsigned int data ) {
+	struct intel_nic *intel = container_of ( mii, struct intel_nic, mii );
+	int rddata;
+
+	/* Initiate write */
+	writel ( ( INTEL_MDIC_WRDATA ( data ) | INTEL_MDIC_REGADD ( reg ) |
+		   INTEL_MDIC_PHYADD_INTERNAL | INTEL_MDIC_OP_WRITE ),
+		 intel->regs + INTEL_MDIC );
+
+	/* Wait for write to complete */
+	rddata = intel_mii_wait ( intel );
+	if ( rddata < 0 )
+		return rddata;
+
+	return 0;
+}
+
+/** MII operations */
+static struct mii_operations intel_mii_operations = {
+	.read = intel_mii_read,
+	.write = intel_mii_write,
+};
 
 /******************************************************************************
  *
@@ -837,6 +935,9 @@ static int intel_probe ( struct pci_device *pci ) {
 	/* Fetch MAC address */
 	if ( ( rc = intel_fetch_mac ( intel, netdev->hw_addr ) ) != 0 )
 		goto err_fetch_mac;
+
+	/* Initialise MII interface */
+	mii_init ( &intel->mii, &intel_mii_operations );
 
 	/* Register network device */
 	if ( ( rc = register_netdev ( netdev ) ) != 0 )
