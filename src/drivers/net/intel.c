@@ -456,6 +456,7 @@ static void intel_check_link ( struct net_device *netdev ) {
 	uint32_t status;
 
 	/* Read link status */
+	mii_dump ( &intel->mii );
 	status = readl ( intel->regs + INTEL_STATUS );
 	DBGC ( intel, "INTEL %p link status is %08x\n", intel, status );
 
