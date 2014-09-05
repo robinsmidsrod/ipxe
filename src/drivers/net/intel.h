@@ -96,7 +96,7 @@ enum intel_descriptor_status {
 #define INTEL_MDIC_REGADD(x)	( (x) << 16 )	/**< PHY register address */
 #define INTEL_MDIC_PHYADD(x)	( (x) << 21 )	/**< PHY address */
 #define INTEL_MDIC_PHYADD_INTERNAL \
-	INTEL_MDIC_PHYADD ( 1 )			/**< Internal PHY address */
+	INTEL_MDIC_PHYADD ( 2 )			/**< Internal PHY address */
 #define INTEL_MDIC_OP(x)	( (x) << 26 )	/**< Opcode */
 #define INTEL_MDIC_OP_WRITE	INTEL_MDIC_OP ( 1 ) /**< Write opcode */
 #define INTEL_MDIC_OP_READ	INTEL_MDIC_OP ( 2 ) /**< Read opcode */

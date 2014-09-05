@@ -432,6 +432,7 @@ static int intel_phy_reset ( struct intel_nic *intel ) {
 	int rc;
 
 	/* Read ADVERTISE register */
+	mii_dump ( &intel->mii );
 	advertise = mii_read ( &intel->mii, MII_ADVERTISE );
 	if ( advertise < 0 ) {
 		rc = advertise;
@@ -443,6 +444,7 @@ static int intel_phy_reset ( struct intel_nic *intel ) {
 
 	/* Advertise all available speeds */
 	advertise |= ( ADVERTISE_ALL | ADVERTISE_NPAGE );
+	mii_dump ( &intel->mii );
 	if ( ( rc = mii_write ( &intel->mii, MII_ADVERTISE, advertise ) ) != 0){
 		DBGC ( intel, "INTEL %p could not write ADVERTISE: %s\n",
 		       intel, strerror ( rc ) );
@@ -451,6 +453,7 @@ static int intel_phy_reset ( struct intel_nic *intel ) {
 	}
 
 	/* Read CTRL1000 register */
+	mii_dump ( &intel->mii );
 	ctrl1000 = mii_read ( &intel->mii, MII_CTRL1000 );
 	if ( ctrl1000 < 0 ) {
 		rc = ctrl1000;
@@ -462,6 +465,7 @@ static int intel_phy_reset ( struct intel_nic *intel ) {
 
 	/* Write CTRL1000 register */
 	ctrl1000 |= ADVERTISE_1000FULL;
+	mii_dump ( &intel->mii );
 	if ( ( rc = mii_write ( &intel->mii, MII_CTRL1000, ctrl1000 ) ) != 0 ) {
 		DBGC ( intel, "INTEL %p could not write CTRL1000: %s\n",
 		       intel, strerror ( rc ) );
