@@ -922,11 +922,17 @@ static int intel_probe ( struct pci_device *pci ) {
 
 	/* Initialise MII interface and restart autonegotiation */
 	mii_init ( &intel->mii, &intel_mii_operations );
+
+	// hack
+	mii_dump ( &intel->mii );
+
 	if ( ( rc = mii_restart ( &intel->mii ) ) != 0 ) {
 		DBGC ( intel, "INTEL %p could not restart autonegotiation: "
 		       "%s\n", intel, strerror ( rc ) );
 		goto err_mii_restart;
 	}
+	// hack
+	mii_dump ( &intel->mii );
 
 	/* Register network device */
 	if ( ( rc = register_netdev ( netdev ) ) != 0 )
