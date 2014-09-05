@@ -420,6 +420,66 @@ static void intel_reset ( struct intel_nic *intel ) {
 	DBGC ( intel, "INTEL %p MAC+PHY reset (ctrl %08x)\n", intel, ctrl );
 }
 
+/**
+ * Reset PHY
+ *
+ * @v intel		Intel device
+ * @ret rc		Return status code
+ */
+static int intel_phy_reset ( struct intel_nic *intel ) {
+	int advertise;
+	int ctrl1000;
+	int rc;
+
+	/* Read ADVERTISE register */
+	advertise = mii_read ( &intel->mii, MII_ADVERTISE );
+	if ( advertise < 0 ) {
+		rc = advertise;
+		DBGC ( intel, "INTEL %p could not read ADVERTISE: %s\n",
+		       intel, strerror ( rc ) );
+		mii_dump ( &intel->mii );
+		return rc;
+	}
+
+	/* Advertise all available speeds */
+	advertise |= ( ADVERTISE_ALL | ADVERTISE_NPAGE );
+	if ( ( rc = mii_write ( &intel->mii, MII_ADVERTISE, advertise ) ) != 0){
+		DBGC ( intel, "INTEL %p could not write ADVERTISE: %s\n",
+		       intel, strerror ( rc ) );
+		mii_dump ( &intel->mii );
+		return rc;
+	}
+
+	/* Read CTRL1000 register */
+	ctrl1000 = mii_read ( &intel->mii, MII_CTRL1000 );
+	if ( ctrl1000 < 0 ) {
+		rc = ctrl1000;
+		DBGC ( intel, "INTEL %p could not read CTRL1000: %s\n",
+		       intel, strerror ( rc ) );
+		mii_dump ( &intel->mii );
+		return rc;
+	}
+
+	/* Write CTRL1000 register */
+	ctrl1000 |= ADVERTISE_1000FULL;
+	if ( ( rc = mii_write ( &intel->mii, MII_CTRL1000, ctrl1000 ) ) != 0 ) {
+		DBGC ( intel, "INTEL %p could not write CTRL1000: %s\n",
+		       intel, strerror ( rc ) );
+		mii_dump ( &intel->mii );
+		return rc;
+	}
+
+	/* Restart autonegotiation */
+	if ( ( rc = mii_restart ( &intel->mii ) ) != 0 ) {
+		DBGC ( intel, "INTEL %p could not restart autonegotiation: "
+		       "%s\n", intel, strerror ( rc ) );
+		mii_dump ( &intel->mii );
+		return rc;
+	}
+
+	return 0;
+}
+
 /******************************************************************************
  *
  * Link state
@@ -920,19 +980,10 @@ static int intel_probe ( struct pci_device *pci ) {
 	if ( ( rc = intel_fetch_mac ( intel, netdev->hw_addr ) ) != 0 )
 		goto err_fetch_mac;
 
-	/* Initialise MII interface and restart autonegotiation */
+	/* Initialise and reset MII interface */
 	mii_init ( &intel->mii, &intel_mii_operations );
-
-	// hack
-	mii_dump ( &intel->mii );
-
-	if ( ( rc = mii_restart ( &intel->mii ) ) != 0 ) {
-		DBGC ( intel, "INTEL %p could not restart autonegotiation: "
-		       "%s\n", intel, strerror ( rc ) );
-		goto err_mii_restart;
-	}
-	// hack
-	mii_dump ( &intel->mii );
+	if ( ( rc = intel_phy_reset ( intel ) ) != 0 )
+		goto err_phy_reset;
 
 	/* Register network device */
 	if ( ( rc = register_netdev ( netdev ) ) != 0 )
@@ -945,7 +996,7 @@ static int intel_probe ( struct pci_device *pci ) {
 
 	unregister_netdev ( netdev );
  err_register_netdev:
- err_mii_restart:
+ err_phy_reset:
  err_fetch_mac:
 	intel_reset ( intel );
 	iounmap ( intel->regs );
